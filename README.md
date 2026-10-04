@@ -21,6 +21,13 @@ $env:PORT = "3000"; $env:CONTROL_KEY = "pick-a-secret"; node server.js
 
 On start it prints the display and control URLs for `localhost` and every LAN IP. Open the control URL on your phone (same Wi-Fi) to drive the wall.
 
+Other environment variables, all optional:
+
+- `DATA_DIR`: where `media/`, `state.json`, `rundowns.json` and `asrun.csv` live (default: next to `server.js`). Give each instance its own to run several walls from one copy of the code.
+- `HOST`: the address to listen on (default `0.0.0.0`, every interface). Set `127.0.0.1` behind a reverse proxy.
+- `PUBLIC_URL`: the address the server is reached at from outside, e.g. `https://wall.example.com`. The control panel then shows `<PUBLIC_URL>/display` as the OBS URL.
+- `MAX_UPLOAD_MB`: largest upload accepted (default `2048`).
+
 - `media/` holds uploaded images and videos. You can also copy files in directly.
 - `state.json` holds the current state, so a restart comes back showing the same thing.
 - If `CONTROL_KEY` is set, open the control page as `/control?key=pick-a-secret`. `/display`, `/events`, `/media` and `/api/ended` never need the key, so OBS needs no credentials.

@@ -9,15 +9,24 @@ const { URL } = require('url');
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const CONTROL_KEY = process.env.CONTROL_KEY || '';
+const HOST = process.env.HOST || '0.0.0.0';
+// Where this server is reached from outside (e.g. https://wall.example.com) when it sits behind
+// a reverse proxy; the control page then shows this as the OBS display URL.
+const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const MEDIA_DIR = path.join(ROOT, 'media');
-const STATE_FILE = path.join(ROOT, 'state.json');
-const RUNDOWN_FILE = path.join(ROOT, 'rundowns.json');
-const ASRUN_FILE = path.join(ROOT, 'asrun.csv');
+// media/ and the files the server rewrites as it runs; a DATA_DIR per instance lets several
+// walls run from one copy of the code.
+const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : ROOT;
+const MEDIA_DIR = path.join(DATA_DIR, 'media');
+const STATE_FILE = path.join(DATA_DIR, 'state.json');
+const RUNDOWN_FILE = path.join(DATA_DIR, 'rundowns.json');
+const ASRUN_FILE = path.join(DATA_DIR, 'asrun.csv');
 
-const MAX_UPLOAD = 2 * 1024 * 1024 * 1024; // ~2 GB
+const MAX_UPLOAD_MB = parseInt(process.env.MAX_UPLOAD_MB, 10) > 0 ? parseInt(process.env.MAX_UPLOAD_MB, 10) : 2048;
+const MAX_UPLOAD = MAX_UPLOAD_MB * 1024 * 1024;
+const TOO_LARGE = 'File too large (max ' + (MAX_UPLOAD_MB % 1024 ? MAX_UPLOAD_MB + ' MB' : MAX_UPLOAD_MB / 1024 + ' GB') + ')';
 const TYPES = ['default', 'image', 'video', 'page', 'text', 'blank', 'black', 'screen'];
 const FITS = ['cover', 'contain', 'fill'];
 const HEX = /^#[0-9a-fA-F]{3,8}$/;
@@ -841,7 +850,7 @@ function handleUpload(req, res) {
     return send(res, 400, { error: 'Allowed types: ' + UPLOAD_EXT.join(', ') });
   }
   const declared = parseInt(req.headers['content-length'], 10);
-  if (declared > MAX_UPLOAD) return send(res, 413, { error: 'File too large (max 2 GB)' });
+  if (declared > MAX_UPLOAD) return send(res, 413, { error: TOO_LARGE });
 
   const tmp = path.join(MEDIA_DIR, `.upload-${Date.now()}-${Math.random().toString(36).slice(2)}.part`);
   const out = fs.createWriteStream(tmp);
@@ -860,7 +869,7 @@ function handleUpload(req, res) {
 
   req.on('data', (c) => {
     received += c.length;
-    if (received > MAX_UPLOAD) fail(413, 'File too large (max 2 GB)');
+    if (received > MAX_UPLOAD) fail(413, TOO_LARGE);
   });
   req.on('aborted', () => fail(400, 'Upload aborted'));
   out.on('error', (e) => fail(500, 'Write failed: ' + e.message));
@@ -1010,6 +1019,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/share' && m === 'GET') return serveStatic(res, 'share.html');
 
     if (p === '/api/info' && m === 'GET') {
+      if (PUBLIC_URL) return send(res, 200, { displayUrl: PUBLIC_URL + '/display', lanDisplayUrls: [] });
       return send(res, 200, { displayUrl: `http://localhost:${PORT}/display`, lanDisplayUrls: lanHosts().map((h) => `http://${h}:${PORT}/display`) });
     }
     if (p === '/api/media' && m === 'GET') return send(res, 200, listMedia());
@@ -1160,13 +1170,15 @@ server.on('upgrade', (req, socket) => {
 scheduleEnd(true);
 
 server.requestTimeout = 0; // allow long uploads
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, HOST, () => {
   const keyQs = CONTROL_KEY ? '?key=' + encodeURIComponent(CONTROL_KEY) : '';
-  const hosts = ['localhost'].concat(lanHosts());
+  let bases = [`http://${HOST}:${PORT}`];
+  if (PUBLIC_URL) bases = [PUBLIC_URL];
+  else if (HOST === '0.0.0.0') bases = ['localhost'].concat(lanHosts()).map((h) => `http://${h}:${PORT}`);
   console.log('wall-screen running');
   console.log('\nDisplay (OBS browser source):');
-  for (const h of hosts) console.log(`  http://${h}:${PORT}/display`);
+  for (const b of bases) console.log(`  ${b}/display`);
   console.log('\nControl:');
-  for (const h of hosts) console.log(`  http://${h}:${PORT}/control${keyQs}`);
+  for (const b of bases) console.log(`  ${b}/control${keyQs}`);
   console.log(CONTROL_KEY ? '\nCONTROL_KEY is set.' : '\nCONTROL_KEY not set: control is open to anyone on the network.');
 });
