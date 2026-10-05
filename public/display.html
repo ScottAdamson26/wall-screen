@@ -7,7 +7,7 @@
   /* Same scheme as the control page, so its monitors can show through this page's empty sides. */
   html { color-scheme: dark; }
   html, body {
-    margin: 0; padding: 0; width: 1920px; height: 1080px;
+    margin: 0; padding: 0; width: 100%; height: 100%;
     overflow: hidden; background: #000; cursor: none;
   }
   /* Everything shown is laid out in the wall's shape (see applyAspect). */
@@ -476,16 +476,20 @@
     });
   }
 
-  // The wall isn't always 16:9. OBS's source stays 1920x1080 and the corner pin squeezes it
-  // onto the wall, so the picture is laid out in the wall's own shape (e.g. 1178x1080 for
-  // 12:11) and stretched to fill the source; the pin's squeeze undoes the stretch on the wall.
-  // The control page's monitors show the wall's true shape instead, with the sides left empty.
+  // The wall isn't always 16:9. The picture is laid out in the wall's own shape (e.g.
+  // 1178x1080 for 12:11) and scaled to fill the OBS source. With the source set to that size
+  // it shows as is; left at 1920x1080 it is stretched, and the corner pin's squeeze onto the
+  // wall undoes the stretch. The control page's monitors (1920x1080 frames) show the wall's
+  // true shape instead, with the sides left empty.
   var stage = document.getElementById('stage');
-  var shownAspect = null;
+  var shownAspect = null, shownSize = '';
+  window.addEventListener('resize', function () { if (shownAspect !== null) applyAspect(shownAspect); });
   function applyAspect(aspect) {
     aspect = aspect || '';
-    if (aspect === shownAspect) return;
+    var size = window.innerWidth + 'x' + window.innerHeight;
+    if (aspect === shownAspect && size === shownSize) return;
     shownAspect = aspect;
+    shownSize = size;
     var m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(aspect);
     var r = m ? Number(m[1]) / Number(m[2]) : 16 / 9;
     var w = r < 16 / 9 ? Math.round(1080 * r) : 1920;
@@ -497,7 +501,8 @@
       stage.style.top = (1080 - h) / 2 + 'px';
       stage.style.transform = '';
     } else {
-      stage.style.transform = w === 1920 && h === 1080 ? '' : 'scale(' + 1920 / w + ',' + 1080 / h + ')';
+      var sx = (window.innerWidth || 1920) / w, sy = (window.innerHeight || 1080) / h;
+      stage.style.transform = Math.abs(sx - 1) < 0.001 && Math.abs(sy - 1) < 0.001 ? '' : 'scale(' + sx + ',' + sy + ')';
     }
   }
 

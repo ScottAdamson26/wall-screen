@@ -430,7 +430,7 @@
         <input type="text" id="obsUrl" readonly value="…" style="flex:1 1 200px">
         <button class="primary" id="btnCopyObs">Copy</button>
       </div>
-      <div class="muted" style="margin-top:6px">Width 1920, height 1080. <span id="obsLan"></span></div>
+      <div class="muted" style="margin-top:6px"><span id="obsSize">Width 1920, height 1080.</span> <span id="obsLan"></span></div>
     </section>
   </div>
 </div>
@@ -438,8 +438,9 @@
 <dialog id="settings">
   <div class="sethead"><h2>Settings</h2><button class="sm" id="settingsClose">Close</button></div>
   <div class="setlabel">Wall shape</div>
-  <div class="muted">The shape of the green screen the corner pin puts the picture on. Everything is laid out for that shape, so nothing looks squashed on the wall. The OBS source stays 1920×1080 and the corner pin doesn't need changing.</div>
+  <div class="muted">The shape of the green screen the corner pin puts the picture on. Everything is laid out for that shape, so nothing looks squashed on the wall.</div>
   <div class="aspects" id="aspects"></div>
+  <div class="muted" id="aspHint" style="margin-bottom:10px"></div>
   <div class="row custom">
     <span class="muted">Custom</span>
     <input type="number" id="aspW" min="1" step="any" placeholder="W" aria-label="Wall width">
@@ -1091,6 +1092,11 @@
     });
     var preset = ASPECTS.filter(function (a) { return a.v === cur; })[0];
     $('aspectTag').textContent = cur ? ' · ' + cur + (preset ? ' ' + preset.note : '') : '';
+    var s = wallShape(cur);
+    $('obsSize').textContent = 'Width ' + s.w + ', height ' + s.h + '.' + (cur ? ' (Wall shape ' + cur + '; 1920×1080 also works, see Settings.)' : '');
+    $('aspHint').textContent = cur
+      ? 'Set the OBS browser source to ' + s.w + '×' + s.h + ' for this shape. Left at 1920×1080 it still works: the picture is stretched to fill the source and the corner pin squeezes it back.'
+      : 'OBS browser source: 1920×1080.';
   }
   $('btnSettings').onclick = function () { renderSettings(); $('settings').showModal(); };
   $('settingsClose').onclick = function () { $('settings').close(); };

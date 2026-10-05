@@ -78,7 +78,7 @@ The source's bounds never change (it's always 1920x1080, whatever is showing), s
 
 ### Wall shape
 
-If the green screen isn't 16:9, pick its shape under **Settings** in the control panel's top bar: 12:11 (Bitz), 15:11 (BetBolt) or a custom width:height. The display then lays everything out in that shape and stretches it across the 1920x1080 source; the corner pin squeezes it back onto the wall, so nothing looks squashed. The OBS source size and the pin stay as they are. The Preview and Program monitors show the wall's real shape, with the unused sides hatched.
+If the green screen isn't 16:9, pick its shape under **Settings** in the control panel's top bar: 12:11 (Bitz), 15:11 (BetBolt) or a custom width:height. The display then lays everything out in that shape, so nothing looks squashed on the wall. Set the browser source to the size Settings shows for the shape (1178x1080 for 12:11, 1473x1080 for 15:11) and pin that. A source left at 1920x1080 also works: the picture is stretched to fill it and the corner pin squeezes it back. The Preview and Program monitors show the wall's real shape, with the unused sides hatched.
 
 ### Audio
 
