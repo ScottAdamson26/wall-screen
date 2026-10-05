@@ -76,6 +76,10 @@ It works like a vision mixer, built for a laptop or desktop.
 
 The source's bounds never change (it's always 1920x1080, whatever is showing), so the pin only needs setting once. The display reconnects by itself after a server restart, and reloads itself when the display page is updated, so OBS never needs a manual refresh. (Displays from before this feature need one last refresh: Properties > **Refresh cache of current page**.)
 
+### Wall shape
+
+If the green screen isn't 16:9, pick its shape under **Settings** in the control panel's top bar: 12:11 (Bitz), 15:11 (BetBolt) or a custom width:height. The display then lays everything out in that shape and stretches it across the 1920x1080 source; the corner pin squeezes it back onto the wall, so nothing looks squashed. The OBS source size and the pin stay as they are. The Preview and Program monitors show the wall's real shape, with the unused sides hatched.
+
 ### Audio
 
 Videos (and screen shares) are silent on the wall unless you turn their sound on: the **Sound** column in the rundown, or the **Muted / Sound** switch under Preview (before the take) or Program (live, without restarting the video). Sound fades in and out with AUTO dissolves. The default loop, images and the control page's monitors are always silent.

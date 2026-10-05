@@ -80,6 +80,7 @@ let state = {
   onAir: null, // { id, label, rid, duration, autoNext, notes } for the program item
   preview: null, // full item cued in preview
   autoMs: 600, // AUTO transition length
+  aspect: '', // shape of the physical wall as 'W:H' ('' = 16:9, the OBS source's own shape)
   changed: Date.now(),
 };
 
@@ -87,6 +88,17 @@ try { state = Object.assign(state, readJsonFile(STATE_FILE)); } catch (e) { /* n
 if (!state.default || typeof state.default !== 'object') state.default = { type: 'video', src: '' };
 if (typeof state.takeId !== 'number') state.takeId = 0;
 if (typeof state.autoMs !== 'number') state.autoMs = 600;
+if (typeof state.aspect !== 'string') state.aspect = '';
+
+// The wall's shape as 'W:H', e.g. '12:11'. Returns it tidied, '' for 16:9, or null if invalid.
+function parseAspect(v) {
+  if (!v) return '';
+  const m = /^\s*(\d+(?:\.\d+)?)\s*[:x/]\s*(\d+(?:\.\d+)?)\s*$/i.exec(String(v));
+  if (!m) return null;
+  const w = Number(m[1]), h = Number(m[2]);
+  if (!(w > 0 && h > 0 && w / h >= 0.2 && w / h <= 5)) return null;
+  return Math.abs(w / h - 16 / 9) < 0.001 ? '' : w + ':' + h;
+}
 
 const clients = new Map(); // SSE response -> role ('display', 'preview', 'control', 'other')
 const peers = new Map(); // page id -> its SSE response, for screen-share setup messages meant for that page only
@@ -951,9 +963,18 @@ function command(p, body, sentAt) {
   else if (p === '/api/preview') err = setPreview(body);
   else if (p === '/api/show') err = applyShow(body);
   else if (p === '/api/settings') {
-    const ms = Number(body.autoMs);
-    if (!isFinite(ms) || ms < 0 || ms > 10000) err = 'autoMs must be 0 to 10000';
-    else commit({ autoMs: Math.round(ms) });
+    const patch = {};
+    if (body.autoMs !== undefined) {
+      const ms = Number(body.autoMs);
+      if (!isFinite(ms) || ms < 0 || ms > 10000) err = 'autoMs must be 0 to 10000';
+      else patch.autoMs = Math.round(ms);
+    }
+    if (body.aspect !== undefined) {
+      const a = parseAspect(body.aspect);
+      if (a === null) err = 'aspect must be width:height, like 12:11';
+      else patch.aspect = a;
+    }
+    if (!err) commit(patch);
   } else return [404, { error: 'Not found' }];
   return err ? [ACTIONS[p] ? 409 : 400, { error: err }] : [200, state];
 }

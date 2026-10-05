@@ -95,6 +95,8 @@
     background: rgba(0,0,0,.75); color: var(--text); font-size: 12px; line-height: 1.35;
     padding: 4px 8px; border-radius: 6px; pointer-events: none;
   }
+  /* A wall that isn't 16:9: the monitors show its true shape, with the unused sides hatched. */
+  .screen.shaped { background: repeating-linear-gradient(135deg, #0b0d12 0 8px, #151922 8px 16px); }
   .screen .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); text-align: center; padding: 16px; }
   .montools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-height: 38px; }
   .scrub { flex: 1 1 140px; accent-color: var(--pvw); }
@@ -239,6 +241,25 @@
   }
   .toast.err { background: var(--danger); color: #fff; }
 
+  /* ---------- settings ---------- */
+  dialog#settings {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px; width: min(520px, calc(100% - 32px)); box-shadow: 0 12px 40px rgba(0,0,0,.5);
+  }
+  dialog#settings::backdrop { background: rgba(0,0,0,.55); }
+  .sethead { display: flex; align-items: center; margin-bottom: 14px; }
+  .sethead h2 { margin-right: auto; font-size: 16px; }
+  .setlabel { font-weight: 650; margin-bottom: 4px; }
+  .aspects { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 10px 0; }
+  .aspects button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 8px 10px; }
+  .aspects button.on { background: #22304a; border-color: var(--accent); }
+  .aspects .shape { flex: none; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
+  .aspects .shape i { display: block; background: var(--muted); border-radius: 2px; }
+  .aspects button.on .shape i { background: var(--accent); }
+  .aspects b { display: block; font: 700 14px var(--mono); }
+  .aspects span { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .custom input { width: 70px; text-align: center; }
+
   body.locked .lockable { pointer-events: none; opacity: .45; }
   #btnLock.on { background: var(--warn); border-color: var(--warn); color: #1a1205; }
 
@@ -266,6 +287,7 @@
   <div class="brand">WALL SCREEN</div>
   <span class="pill" title="Connection from this page to the wall-screen server"><span class="dot" id="srvDot"></span><span id="srvText">Connecting…</span></span>
   <span class="pill" id="obsPill"><span class="dot" id="obsDot"></span><span id="obsText">OBS display: …</span></span>
+  <button class="sm lockable" id="btnSettings" title="Wall shape and other settings">Settings<span id="aspectTag"></span></button>
   <button class="sm" id="btnLock" title="Lock the panel against accidental clicks and key presses">Lock</button>
   <span class="clock" id="clock">--:--:--</span>
 </div>
@@ -412,6 +434,21 @@
     </section>
   </div>
 </div>
+
+<dialog id="settings">
+  <div class="sethead"><h2>Settings</h2><button class="sm" id="settingsClose">Close</button></div>
+  <div class="setlabel">Wall shape</div>
+  <div class="muted">The shape of the green screen the corner pin puts the picture on. Everything is laid out for that shape, so nothing looks squashed on the wall. The OBS source stays 1920×1080 and the corner pin doesn't need changing.</div>
+  <div class="aspects" id="aspects"></div>
+  <div class="row custom">
+    <span class="muted">Custom</span>
+    <input type="number" id="aspW" min="1" step="any" placeholder="W" aria-label="Wall width">
+    <span>:</span>
+    <input type="number" id="aspH" min="1" step="any" placeholder="H" aria-label="Wall height">
+    <button class="sm" id="aspSet">Use</button>
+  </div>
+  <div class="muted" id="aspErr" style="color:var(--danger);margin-top:8px" hidden></div>
+</dialog>
 
 <script src="/screen.js"></script>
 <script>
@@ -708,10 +745,27 @@
   function hasType(dt, t) { return Array.prototype.indexOf.call(dt.types || [], t) >= 0; }
 
   // ---------- monitors ----------
+  // The wall's shape in the display's 1920x1080 space: the same sums as applyAspect in display.html.
+  function wallShape(aspect) {
+    var m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(aspect || '');
+    var r = m ? Number(m[1]) / Number(m[2]) : 16 / 9;
+    return r < 16 / 9 ? { w: Math.round(1080 * r), h: 1080 } : { w: 1920, h: Math.round(1920 / r) };
+  }
+  // The Program monitor is the display itself, which shapes itself. The Preview stage is drawn
+  // here, so it takes the wall's shape here, centred in the monitor.
   function fitScreens() {
+    var shape = wallShape(state && state.aspect);
     Array.prototype.forEach.call(document.querySelectorAll('.screen'), function (s) {
+      s.classList.toggle('shaped', !!(state && state.aspect));
       var c = s.querySelector('.stage, iframe');
-      if (c) c.style.transform = 'scale(' + (s.clientWidth / 1920) + ')';
+      if (!c) return;
+      var t = 'scale(' + (s.clientWidth / 1920) + ')';
+      if (c.classList.contains('stage')) {
+        c.style.width = shape.w + 'px';
+        c.style.height = shape.h + 'px';
+        t += ' translate(' + (1920 - shape.w) / 2 + 'px,' + (1080 - shape.h) / 2 + 'px)';
+      }
+      c.style.transform = t;
     });
   }
   if (window.ResizeObserver) {
@@ -1000,10 +1054,66 @@
     this.blur(); // so Space and Enter go back to TAKE and AUTO
   });
 
+  // ---------- settings ----------
+  var ASPECTS = [
+    { v: '', name: '16:9', note: 'Standard' },
+    { v: '12:11', name: '12:11', note: 'Bitz' },
+    { v: '15:11', name: '15:11', note: 'BetBolt' }
+  ];
+  function shapeIcon(aspect) {
+    var s = wallShape(aspect), k = 28 / Math.max(s.w, s.h);
+    var box = el('span', 'shape'), i = el('i');
+    i.style.width = Math.round(s.w * k) + 'px';
+    i.style.height = Math.round(s.h * k) + 'px';
+    box.appendChild(i);
+    return box;
+  }
+  // Toasts sit under the open dialog, so its errors show in it.
+  function showAspErr(msg) { $('aspErr').textContent = msg; $('aspErr').hidden = false; }
+  function setAspect(v) {
+    $('aspErr').hidden = true;
+    api('POST', '/api/settings', { aspect: v }).catch(function (e) { showAspErr(e.message || 'Could not change the wall shape'); });
+  }
+  function renderSettings() {
+    var box = $('aspects'), cur = (state && state.aspect) || '';
+    box.innerHTML = '';
+    var list = ASPECTS.slice();
+    if (!list.some(function (a) { return a.v === cur; })) list.push({ v: cur, name: cur, note: 'Custom' });
+    list.forEach(function (a) {
+      var b = el('button', a.v === cur ? 'on' : '');
+      b.appendChild(shapeIcon(a.v));
+      var t = el('div');
+      t.appendChild(el('b', '', a.name));
+      t.appendChild(el('span', '', a.note));
+      b.appendChild(t);
+      b.onclick = function () { setAspect(a.v); };
+      box.appendChild(b);
+    });
+    var preset = ASPECTS.filter(function (a) { return a.v === cur; })[0];
+    $('aspectTag').textContent = cur ? ' · ' + cur + (preset ? ' ' + preset.note : '') : '';
+  }
+  $('btnSettings').onclick = function () { renderSettings(); $('settings').showModal(); };
+  $('settingsClose').onclick = function () { $('settings').close(); };
+  // A click on the dimmed backdrop closes it too.
+  $('settings').addEventListener('click', function (e) { if (e.target === this) this.close(); });
+  $('aspSet').onclick = function () {
+    var w = Number($('aspW').value), h = Number($('aspH').value);
+    if (!(w > 0 && h > 0)) return showAspErr('Enter the wall\'s width and height, e.g. 12 and 11.');
+    setAspect(w + ':' + h);
+  };
+  ['aspW', 'aspH'].forEach(function (id) {
+    $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') $('aspSet').click(); });
+  });
+
   // ---------- render state ----------
-  var lastDefault = null;
+  var lastDefault = null, lastAspect = null;
   function renderState() {
     if (!state) return;
+    if (state.aspect !== lastAspect) {
+      lastAspect = state.aspect;
+      fitScreens();
+      renderSettings();
+    }
     $('pgmName').textContent = itemLabel(programItem());
     var isVideo = state.type === 'video';
     $('pgmLoop').hidden = !isVideo;
@@ -1681,6 +1791,7 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { disarmAll(); return; }
     if (locked || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if ($('settings').open) return; // Space on a settings button mustn't TAKE
     if (isTyping(e.target)) return;
     switch (e.key) {
       case ' ': e.preventDefault(); take(e); break;

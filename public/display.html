@@ -4,12 +4,19 @@
 <meta charset="utf-8">
 <title>wall-screen display</title>
 <style>
+  /* Same scheme as the control page, so its monitors can show through this page's empty sides. */
+  html { color-scheme: dark; }
   html, body {
     margin: 0; padding: 0; width: 1920px; height: 1080px;
     overflow: hidden; background: #000; cursor: none;
   }
+  /* Everything shown is laid out in the wall's shape (see applyAspect). */
+  #stage {
+    position: absolute; left: 0; top: 0; width: 1920px; height: 1080px;
+    overflow: hidden; transform-origin: 0 0;
+  }
   .layer {
-    position: absolute; inset: 0; width: 1920px; height: 1080px;
+    position: absolute; inset: 0; width: 100%; height: 100%;
     opacity: 0; transition: opacity 0.6s ease;
   }
   .layer.front { opacity: 1; z-index: 2; }
@@ -27,8 +34,10 @@
 </style>
 </head>
 <body>
+<div id="stage">
 <div class="layer front" id="layerA"></div>
 <div class="layer" id="layerB"></div>
+</div>
 <script src="/screen.js"></script>
 <script>
 (function () {
@@ -467,9 +476,38 @@
     });
   }
 
+  // The wall isn't always 16:9. OBS's source stays 1920x1080 and the corner pin squeezes it
+  // onto the wall, so the picture is laid out in the wall's own shape (e.g. 1178x1080 for
+  // 12:11) and stretched to fill the source; the pin's squeeze undoes the stretch on the wall.
+  // The control page's monitors show the wall's true shape instead, with the sides left empty.
+  var stage = document.getElementById('stage');
+  var shownAspect = null;
+  function applyAspect(aspect) {
+    aspect = aspect || '';
+    if (aspect === shownAspect) return;
+    shownAspect = aspect;
+    var m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(aspect);
+    var r = m ? Number(m[1]) / Number(m[2]) : 16 / 9;
+    var w = r < 16 / 9 ? Math.round(1080 * r) : 1920;
+    var h = r < 16 / 9 ? 1080 : Math.round(1920 / r);
+    stage.style.width = w + 'px';
+    stage.style.height = h + 'px';
+    if (isPreview) {
+      stage.style.left = (1920 - w) / 2 + 'px';
+      stage.style.top = (1080 - h) / 2 + 'px';
+      stage.style.transform = '';
+    } else {
+      stage.style.transform = w === 1920 && h === 1080 ? '' : 'scale(' + 1920 / w + ',' + 1080 / h + ')';
+    }
+  }
+
   function applyLook(s) {
-    document.documentElement.style.background = s.bg || '#000';
-    document.body.style.background = s.bg || '#000';
+    applyAspect(s.aspect);
+    // A preview leaves the sides of a shaped wall see-through, so the monitor shows the shape.
+    var page = isPreview && shownAspect ? 'transparent' : s.bg || '#000';
+    document.documentElement.style.background = page;
+    document.body.style.background = page;
+    stage.style.background = s.bg || '#000';
     var media = document.querySelectorAll('.layer > img, .layer > video');
     for (var i = 0; i < media.length; i++) media[i].style.objectFit = s.fit || 'cover';
     if (defaultEl) defaultEl.style.objectFit = s.fit || 'cover';
